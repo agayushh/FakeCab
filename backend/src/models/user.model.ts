@@ -1,11 +1,13 @@
-import { Schema, InferSchemaType, model } from "mongoose";
+import mongoose, { Schema, InferSchemaType, model } from "mongoose";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 
 const userSchema = new Schema(
   {
     fullName: {
       firstName: {
         type: String,
-        require: true,
+        required: true,
         minlength: [3, "First Name should be atleast of 3 characters"],
       },
       lastName: {
@@ -13,17 +15,16 @@ const userSchema = new Schema(
         minlength: [3, "Last Name should be atleast of 3 characters"],
       },
     },
-    minlength: [5, "password should be atleast 5 characters long"],
 
     email: {
       type: String,
-      require: true,
+      required: true,
       unique: true,
       minlength: [5, "Email should be of atleast 5 characters long"],
     },
     password: {
       type: String,
-      require: true,
+      required: true,
     },
     socketId: {
       type: String,
@@ -31,6 +32,27 @@ const userSchema = new Schema(
   },
   { timestamps: true }
 );
+
+userSchema.pre("save", async function (next) {
+  if (!this.isModified(this.password)) return next(); //only runs when password is changed
+  this.password = await bcrypt.hash(this.password, 10);
+  next();
+});
+
+userSchema.methods.comparePassword = async function (password: string) {
+  return await bcrypt.compare(password, this.password);
+};
+
+userSchema.methods.generateAuthToken = function () {
+  const token = jwt.sign(
+    {
+      name: this.fullName,
+      _id: this._id,
+    },
+    process.env.JWT_SECRET as string
+  );
+  return token;
+};
 
 type UserType = InferSchemaType<typeof userSchema>;
 
